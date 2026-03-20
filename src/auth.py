@@ -13,13 +13,27 @@ TOOL_PERMISSIONS: dict[str, set[str]] = {
     "tool_get_meta_info": {"admin", "viewer"},
 }
 
+# セッションID → ロールの対応（SSEトランスポート用）
+_session_roles: dict[str, str | None] = {}
 
-def get_role_from_request(request: Any) -> str | None:
-    """HTTP リクエストの X-Role ヘッダーからロールを取得する。
 
-    request が None（stdio トランスポート）の場合は ESTAT_ROLE 環境変数にフォールバック。
+def store_session_role(session_id: str, role: str | None) -> None:
+    """SSE接続時のセッションIDとロールを紐付けて保存する。"""
+    _session_roles[session_id] = role
+
+
+def get_role_for_request(request: Any) -> str | None:
+    """リクエストからロールを取得する。
+
+    優先順位:
+    1. session_id クエリパラメータ → セッションストアを参照
+    2. X-Role ヘッダー（直接curl等でのテスト用フォールバック）
+    3. ESTAT_ROLE 環境変数（stdio用フォールバック）
     """
     if request is not None:
+        session_id = request.query_params.get("session_id")
+        if session_id and session_id in _session_roles:
+            return _session_roles[session_id]
         return request.headers.get("X-Role") or None
     return os.environ.get("ESTAT_ROLE") or None
 
@@ -34,7 +48,7 @@ def check_permission(tool_name: str, request: Any = None) -> tuple[bool, str]:
     Returns:
         (許可, 拒否理由) のタプル。許可の場合は拒否理由は空文字。
     """
-    role = get_role_from_request(request)
+    role = get_role_for_request(request)
 
     if role is None or role not in VALID_ROLES:
         reason = f"Access denied: X-Role header is missing or invalid (got: {role!r})"
