@@ -2,7 +2,16 @@ from unittest.mock import patch
 
 import pytest
 
+from src.auth import current_role
 from src.server import mcp
+
+
+@pytest.fixture(autouse=True)
+def set_admin_role():
+    """サーバーテストは admin ロールで実行する。"""
+    token = current_role.set("admin")
+    yield
+    current_role.reset(token)
 
 
 def test_tools_registered():
