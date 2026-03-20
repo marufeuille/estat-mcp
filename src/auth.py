@@ -1,13 +1,8 @@
-import contextvars
 import logging
 import os
+from typing import Any
 
 logger = logging.getLogger(__name__)
-
-# リクエストスコープのロールを保持するコンテキスト変数
-current_role: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "current_role", default=None
-)
 
 VALID_ROLES = {"admin", "viewer"}
 
@@ -19,21 +14,28 @@ TOOL_PERMISSIONS: dict[str, set[str]] = {
 }
 
 
-def get_current_role() -> str | None:
-    """現在のロールを返す。ContextVar未設定時は環境変数 ESTAT_ROLE にフォールバック。"""
-    role = current_role.get()
-    if role is None:
-        role = os.environ.get("ESTAT_ROLE") or None
-    return role
+def get_role_from_request(request: Any) -> str | None:
+    """HTTP リクエストの X-Role ヘッダーからロールを取得する。
+
+    request が None（stdio トランスポート）の場合は ESTAT_ROLE 環境変数にフォールバック。
+    """
+    if request is not None:
+        return request.headers.get("X-Role") or None
+    return os.environ.get("ESTAT_ROLE") or None
 
 
-def check_permission(tool_name: str) -> tuple[bool, str]:
+def check_permission(tool_name: str, request: Any = None) -> tuple[bool, str]:
     """ツール呼び出しの権限を確認する。
+
+    Args:
+        tool_name: 呼び出し対象のツール名
+        request: Starlette Request オブジェクト（SSE トランスポート時）
 
     Returns:
         (許可, 拒否理由) のタプル。許可の場合は拒否理由は空文字。
     """
-    role = get_current_role()
+    role = get_role_from_request(request)
+
     if role is None or role not in VALID_ROLES:
         reason = f"Access denied: X-Role header is missing or invalid (got: {role!r})"
         logger.warning("[AUTH] %s | tool=%s", reason, tool_name)

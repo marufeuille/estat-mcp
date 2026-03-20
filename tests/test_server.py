@@ -1,17 +1,18 @@
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.auth import current_role
 from src.server import mcp
 
 
-@pytest.fixture(autouse=True)
-def set_admin_role():
-    """サーバーテストは admin ロールで実行する。"""
-    token = current_role.set("admin")
-    yield
-    current_role.reset(token)
+def _make_ctx(role: str | None = "admin"):
+    """指定ロールを持つ Context モックを作成する。"""
+    ctx = MagicMock()
+    if role is not None:
+        ctx.request_context.request.headers = {"X-Role": role}
+    else:
+        ctx.request_context.request.headers = {}
+    return ctx
 
 
 def test_tools_registered():
@@ -50,28 +51,41 @@ META_INFO_OK = {
 @patch("src.server.get_stats_list", return_value=STATS_LIST_OK)
 def test_tool_get_stats_list_success(mock_fn):
     from src.server import tool_get_stats_list
-    result = tool_get_stats_list(search_word="人口")
+    result = tool_get_stats_list(_make_ctx("admin"), search_word="人口")
     assert "GET_STATS_LIST" in result
-    mock_fn.assert_called_once()
 
 
 @patch("src.server.get_stats_data", return_value=STATS_DATA_OK)
 def test_tool_get_stats_data_success(mock_fn):
     from src.server import tool_get_stats_data
-    result = tool_get_stats_data(stats_data_id="0003448237")
+    result = tool_get_stats_data(_make_ctx("admin"), stats_data_id="0003448237")
     assert "GET_STATS_DATA" in result
 
 
 @patch("src.server.get_meta_info", return_value=META_INFO_OK)
 def test_tool_get_meta_info_success(mock_fn):
     from src.server import tool_get_meta_info
-    result = tool_get_meta_info(stats_data_id="0003448237")
+    result = tool_get_meta_info(_make_ctx("admin"), stats_data_id="0003448237")
     assert "GET_META_INFO" in result
 
 
 @patch("src.server.get_stats_list", side_effect=__import__("src.estat_client", fromlist=["EStatAPIError"]).EStatAPIError("100", "不正なパラメータ"))
 def test_tool_returns_error_dict_on_api_error(mock_fn):
     from src.server import tool_get_stats_list
-    result = tool_get_stats_list()
+    result = tool_get_stats_list(_make_ctx("admin"))
     assert "error" in result
     assert result["status"] == "100"
+
+
+def test_tool_denied_without_role():
+    from src.server import tool_get_stats_list
+    result = tool_get_stats_list(_make_ctx(None))
+    assert "error" in result
+    assert "Access denied" in result["error"]
+
+
+def test_viewer_can_call_read_tools():
+    from src.server import tool_get_stats_list
+    with patch("src.server.get_stats_list", return_value=STATS_LIST_OK):
+        result = tool_get_stats_list(_make_ctx("viewer"))
+    assert "GET_STATS_LIST" in result
