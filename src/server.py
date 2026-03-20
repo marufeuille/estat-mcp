@@ -95,7 +95,13 @@ def tool_get_meta_info(ctx: Context, stats_data_id: str) -> dict:
 
 
 def main():
-    mcp.run(transport="sse")
+    import uvicorn
+
+    from src.middleware import SessionRoleMiddleware
+
+    base_app = mcp.sse_app()
+    app = SessionRoleMiddleware(base_app)
+    uvicorn.run(app, host=mcp.settings.host, port=mcp.settings.port)
 
 
 if __name__ == "__main__":
