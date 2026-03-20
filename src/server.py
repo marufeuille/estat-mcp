@@ -1,5 +1,6 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 
+from src.auth import check_permission
 from src.estat_client import EStatAPIError, get_meta_info, get_stats_data, get_stats_list
 
 mcp = FastMCP("estat-mcp")
@@ -7,6 +8,7 @@ mcp = FastMCP("estat-mcp")
 
 @mcp.tool()
 def tool_get_stats_list(
+    ctx: Context,
     search_word: str | None = None,
     stats_field: str | None = None,
     stats_code: str | None = None,
@@ -22,6 +24,11 @@ def tool_get_stats_list(
         start_position: 取得開始位置（1始まり）
         limit: 最大取得件数（上限100000）
     """
+    request = ctx.request_context.request if ctx.request_context else None
+    ok, reason = check_permission("tool_get_stats_list", request=request)
+    if not ok:
+        return {"error": reason}
+
     try:
         return get_stats_list(
             search_word=search_word,
@@ -36,6 +43,7 @@ def tool_get_stats_list(
 
 @mcp.tool()
 def tool_get_stats_data(
+    ctx: Context,
     stats_data_id: str,
     start_position: int = 1,
     limit: int = 100000,
@@ -51,6 +59,11 @@ def tool_get_stats_data(
         cd_area: 地域コード（例: "13" = 東京都）
         cd_time: 時間軸コード（例: "2020000000"）
     """
+    request = ctx.request_context.request if ctx.request_context else None
+    ok, reason = check_permission("tool_get_stats_data", request=request)
+    if not ok:
+        return {"error": reason}
+
     try:
         return get_stats_data(
             stats_data_id=stats_data_id,
@@ -64,12 +77,17 @@ def tool_get_stats_data(
 
 
 @mcp.tool()
-def tool_get_meta_info(stats_data_id: str) -> dict:
+def tool_get_meta_info(ctx: Context, stats_data_id: str) -> dict:
     """e-Stat APIから統計表のメタ情報（分類・時間軸など）を取得する。
 
     Args:
         stats_data_id: 統計表ID（例: "0003448237"）
     """
+    request = ctx.request_context.request if ctx.request_context else None
+    ok, reason = check_permission("tool_get_meta_info", request=request)
+    if not ok:
+        return {"error": reason}
+
     try:
         return get_meta_info(stats_data_id=stats_data_id)
     except EStatAPIError as e:
@@ -77,7 +95,7 @@ def tool_get_meta_info(stats_data_id: str) -> dict:
 
 
 def main():
-    mcp.run()
+    mcp.run(transport="sse")
 
 
 if __name__ == "__main__":
