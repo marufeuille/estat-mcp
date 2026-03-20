@@ -60,7 +60,7 @@ def get_stats_list(
     if stats_code:
         params["statsCode"] = stats_code
 
-    with httpx.Client() as client:
+    with httpx.Client(timeout=30.0) as client:
         response = client.get(f"{BASE_URL}/getStatsList", params=params)
         response.raise_for_status()
 
@@ -97,7 +97,7 @@ def get_stats_data(
     if cd_time:
         params["cdTime"] = cd_time
 
-    with httpx.Client() as client:
+    with httpx.Client(timeout=30.0) as client:
         response = client.get(f"{BASE_URL}/getStatsData", params=params)
         response.raise_for_status()
 
@@ -118,7 +118,7 @@ def get_meta_info(stats_data_id: str) -> dict:
         "statsDataId": stats_data_id,
     }
 
-    with httpx.Client() as client:
+    with httpx.Client(timeout=30.0) as client:
         response = client.get(f"{BASE_URL}/getMetaInfo", params=params)
         response.raise_for_status()
 
